@@ -15,3 +15,11 @@ __pycache__/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# OAuth credentials
+email_services/credentials/
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3

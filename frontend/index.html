@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>9-to-5 AI</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 240px;
+            background: #111827;
+            color: white;
+            padding: 24px 18px;
+        }
+
+        .brand {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 30px;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            color: #d1d5db;
+            cursor: pointer;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background: #1f2937;
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            padding: 30px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+
+        .topbar h1 {
+            margin: 0;
+        }
+
+        .status-badge {
+            background: #dcfce7;
+            color: #166534;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-weight: bold;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card,
+        .card {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+        }
+
+        .stat-card h3 {
+            margin: 0 0 8px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .stat-card strong {
+            font-size: 28px;
+        }
+
+        .card {
+            margin-bottom: 22px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 4px;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .secondary-button {
+            background: #059669;
+            margin-left: 8px;
+        }
+
+        .secondary-button:hover {
+            background: #047857;
+        }
+
+        .danger-button {
+            background: #dc2626;
+            margin-left: 8px;
+        }
+
+        .danger-button:hover {
+            background: #b91c1c;
+        }
+
+        .warning-button {
+            background: #d97706;
+            margin-left: 8px;
+        }
+
+        .warning-button:hover {
+            background: #b45309;
+        }
+
+        .purple-button {
+            background: #7c3aed;
+            margin-left: 8px;
+        }
+
+        .purple-button:hover {
+            background: #6d28d9;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            margin-top: 6px;
+            margin-bottom: 14px;
+        }
+
+        textarea {
+            min-height: 130px;
+        }
+
+        .email {
+            padding: 14px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .email-subject {
+            font-weight: bold;
+        }
+
+        .email-from {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .email-snippet {
+            margin-top: 8px;
+            color: #4b5563;
+        }
+
+        .job-card,
+        .application-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 18px;
+            margin-top: 15px;
+        }
+
+        .job-header,
+        .application-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .job-title,
+        .application-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .job-company,
+        .application-company {
+            color: #4b5563;
+            margin-top: 4px;
+        }
+
+        .match-score {
+            font-size: 20px;
+            font-weight: bold;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 8px 12px;
+            border-radius: 10px;
+            height: fit-content;
+        }
+
+        .job-meta,
+        .application-meta {
+            margin-top: 12px;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .job-description {
+            margin-top: 12px;
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .reasons {
+            margin-top: 12px;
+            padding-left: 20px;
+        }
+
+        .job-actions,
+        .application-actions,
+        .tracker-actions {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .job-actions a,
+        .application-actions a {
+            text-decoration: none;
+            background: #111827;
+            color: white;
+            padding: 9px 14px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .placeholder {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .search-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .search-row input {
+            margin-bottom: 0;
+        }
+
+        .application-status {
+            padding: 7px 11px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: bold;
+            height: fit-content;
+            text-transform: capitalize;
+        }
+
+        .status-draft {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-ready_for_review {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-approved {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-applied {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .status-interview {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .status-rejected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-offer {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-needs_changes {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .generated-content {
+            margin-top: 18px;
+            padding: 18px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .generated-content h3 {
+            margin-top: 0;
+        }
+
+        .generated-text {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            color: #374151;
+        }
+
+        .history-box {
+            display: none;
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 10px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+
+        .history-box.visible {
+            display: block;
+        }
+
+        .history-item {
+            position: relative;
+            margin-left: 10px;
+            padding: 0 0 18px 24px;
+            border-left: 2px solid #d1d5db;
+        }
+
+        .history-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .history-dot {
+            position: absolute;
+            left: -7px;
+            top: 2px;
+            width: 12px;
+            height: 12px;
+            background: #2563eb;
+            border-radius: 50%;
+        }
+
+        .history-status {
+            font-weight: bold;
+            text-transform: capitalize;
+        }
+
+        .history-note {
+            margin-top: 4px;
+            color: #4b5563;
+        }
+
+        .history-date {
+            margin-top: 4px;
+            color: #9ca3af;
+            font-size: 13px;
+        }
+
+        #applicationStatus,
+        #draftStatus {
+            margin-top: 12px;
+            font-weight: bold;
+        }
+
+        @media (max-width: 900px) {
+            .sidebar {
+                width: 190px;
+            }
+
+            .grid,
+            .search-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <aside class="sidebar">
+        <div class="brand">9-to-5 AI</div>
+
+        <div class="nav-item active">🏠 Dashboard</div>
+        <div class="nav-item">📬 Email</div>
+        <div class="nav-item">💼 Jobs</div>
+        <div class="nav-item">📝 Applications</div>
+        <div class="nav-item">🤖 Assistant</div>
+        <div class="nav-item">⚙️ Settings</div>
+    </aside>
+
+    <main class="main">
+
+        <div class="topbar">
+            <h1>Dashboard</h1>
+            <div class="status-badge">● Online</div>
+        </div>
+
+        <div class="grid">
+
+            <div class="stat-card">
+                <h3>Recent Emails</h3>
+                <strong id="emailCount">0</strong>
+            </div>
+
+            <div class="stat-card">
+                <h3>Job Matches</h3>
+                <strong id="jobCount">0</strong>
+            </div>
+
+            <div class="stat-card">
+                <h3>Applications</h3>
+                <strong id="applicationCount">0</strong>
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            <h2>💼 Job Search</h2>
+
+            <div class="search-row">
+
+                <div>
+                    <label>Job Keywords</label>
+                    <input
+                        id="jobKeywords"
+                        value="IT support"
+                        placeholder="IT support"
+                    >
+                </div>
+
+                <div>
+                    <label>Location</label>
+                    <input
+                        id="jobLocation"
+                        value="Ottawa"
+                        placeholder="Ottawa"
+                    >
+                </div>
+
+                <button onclick="loadJobs()">
+                    Find Jobs
+                </button>
+
+            </div>
+
+            <div id="applicationStatus"></div>
+
+            <div id="jobs">
+                <p class="placeholder">
+                    Click Find Jobs to search for matches.
+                </p>
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            <h2>📝 Applications</h2>
+
+            <button onclick="loadApplications()">
+                Refresh Applications
+            </button>
+
+            <div id="applications">
+                <p class="placeholder">
+                    Jobs selected for review will appear here.
+                </p>
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            <h2>📬 Recent Gmail</h2>
+
+            <button onclick="loadEmails()">
+                Refresh Emails
+            </button>
+
+            <div id="emails">
+                <p class="placeholder">
+                    Click Refresh Emails to load your newest messages.
+                </p>
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            <h2>✉️ Create Gmail Draft</h2>
+
+            <label>To</label>
+            <input
+                id="draftTo"
+                type="email"
+                placeholder="person@example.com"
+            >
+
+            <label>Subject</label>
+            <input
+                id="draftSubject"
+                placeholder="Subject"
+            >
+
+            <label>Message</label>
+            <textarea
+                id="draftBody"
+                placeholder="Write your message..."
+            ></textarea>
+
+            <button onclick="createDraft()">
+                Create Draft
+            </button>
+
+            <div id="draftStatus"></div>
+
+        </div>
+
+    </main>
+
+</div>
+
+
+<script>
+
+async function loadJobs() {
+
+    const keywords =
+        document.getElementById("jobKeywords").value;
+
+    const location =
+        document.getElementById("jobLocation").value;
+
+    const container =
+        document.getElementById("jobs");
+
+    container.innerHTML =
+        "<p>Searching for jobs...</p>";
+
+    try {
+
+        const response = await fetch(
+            `/jobs?keywords=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}&max_results=20`
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `Job search failed: ${response.status}`
+            );
+        }
+
+        const jobs =
+            await response.json();
+
+        document.getElementById(
+            "jobCount"
+        ).textContent = jobs.length;
+
+        container.innerHTML = "";
+
+        if (jobs.length === 0) {
+            container.innerHTML =
+                '<p class="placeholder">No matching jobs found.</p>';
+            return;
+        }
+
+        jobs.forEach(job => {
+
+            const card =
+                document.createElement("div");
+
+            card.className =
+                "job-card";
+
+            const salary =
+                formatSalary(
+                    job.salary_min,
+                    job.salary_max
+                );
+
+            const reasons =
+                (job.match_reasons || [])
+                    .map(
+                        reason =>
+                            `<li>${escapeHtml(reason)}</li>`
+                    )
+                    .join("");
+
+            card.innerHTML = `
+
+                <div class="job-header">
+
+                    <div>
+
+                        <div class="job-title">
+                            ${escapeHtml(job.title)}
+                        </div>
+
+                        <div class="job-company">
+                            ${escapeHtml(job.company)}
+                        </div>
+
+                    </div>
+
+                    <div class="match-score">
+                        ${job.match_score}% Match
+                    </div>
+
+                </div>
+
+                <div class="job-meta">
+                    📍 ${escapeHtml(job.location)}
+                    <br>
+                    💰 ${salary}
+                </div>
+
+                <div class="job-description">
+                    ${escapeHtml(job.description)}
+                </div>
+
+                <strong>
+                    Why it matches:
+                </strong>
+
+                <ul class="reasons">
+                    ${reasons}
+                </ul>
+
+                <div class="job-actions">
+
+                    <a
+                        href="${escapeAttribute(job.url)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View Job
+                    </a>
+
+                    <button
+                        class="secondary-button review-button"
+                    >
+                        Review Application
+                    </button>
+
+                </div>
+            `;
+
+            const reviewButton =
+                card.querySelector(
+                    ".review-button"
+                );
+
+            reviewButton.addEventListener(
+                "click",
+                () => createApplication(job)
+            );
+
+            container.appendChild(card);
+        });
+
+    } catch (error) {
+
+        container.innerHTML =
+            "<p>Could not load jobs.</p>";
+
+        console.error(error);
+    }
+}
+
+
+async function createApplication(job) {
+
+    const status =
+        document.getElementById(
+            "applicationStatus"
+        );
+
+    status.textContent =
+        `Creating application for ${job.title}...`;
+
+    try {
+
+        const response =
+            await fetch(
+                "/applications",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        job_id: String(job.id),
+                        title: job.title || "",
+                        company: job.company || "",
+                        location: job.location || "",
+                        url: job.url || "",
+                        description:
+                            job.description || "",
+                        match_score:
+                            job.match_score || 0
+                    })
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                `Application request failed: ${response.status}`
+            );
+        }
+
+        const application =
+            await response.json();
+
+        status.textContent =
+            `✅ ${application.title} added to Applications.`;
+
+        await loadApplications();
+
+    } catch (error) {
+
+        status.textContent =
+            "Could not create the application.";
+
+        console.error(error);
+    }
+}
+
+
+async function loadApplications() {
+
+    const container =
+        document.getElementById(
+            "applications"
+        );
+
+    container.innerHTML =
+        "<p>Loading applications...</p>";
+
+    try {
+
+        const response =
+            await fetch("/applications");
+
+        if (!response.ok) {
+            throw new Error(
+                `Could not load applications: ${response.status}`
+            );
+        }
+
+        const applications =
+            await response.json();
+
+        document.getElementById(
+            "applicationCount"
+        ).textContent =
+            applications.length;
+
+        container.innerHTML = "";
+
+        if (applications.length === 0) {
+
+            container.innerHTML =
+                '<p class="placeholder">No applications yet.</p>';
+
+            return;
+        }
+
+        applications.forEach(
+            application => {
+
+                const card =
+                    document.createElement(
+                        "div"
+                    );
+
+                card.className =
+                    "application-card";
+
+                let generatedContent = "";
+
+                if (
+                    application.generation_status ===
+                    "generated"
+                ) {
+
+                    generatedContent = `
+
+                        <div class="generated-content">
+
+                            <h3>
+                                Application Message
+                            </h3>
+
+                            <div class="generated-text">
+${escapeHtml(
+    application.application_message
+)}
+                            </div>
+
+                            <h3 style="margin-top:20px;">
+                                Cover Letter
+                            </h3>
+
+                            <div class="generated-text">
+${escapeHtml(
+    application.cover_letter
+)}
+                            </div>
+
+                        </div>
+                    `;
+                }
+
+
+                let generationButtons = "";
+
+                if (
+                    application.generation_status !==
+                    "generated"
+                    &&
+                    application.status !== "applied"
+                    &&
+                    application.status !== "interview"
+                    &&
+                    application.status !== "rejected"
+                    &&
+                    application.status !== "offer"
+                ) {
+
+                    generationButtons = `
+
+                        <button
+                            onclick="generateApplication(${application.id})"
+                        >
+                            Generate Application
+                        </button>
+                    `;
+                }
+
+
+                let approvalButtons = "";
+
+                if (
+                    application.generation_status ===
+                    "generated"
+                    &&
+                    application.approval_status ===
+                    "pending"
+                    &&
+                    application.status !== "applied"
+                ) {
+
+                    approvalButtons = `
+
+                        <button
+                            class="secondary-button"
+                            onclick="approveApplication(${application.id})"
+                        >
+                            Approve
+                        </button>
+
+                        <button
+                            class="danger-button"
+                            onclick="rejectApplication(${application.id})"
+                        >
+                            Needs Changes
+                        </button>
+                    `;
+                }
+
+
+                const trackerButtons =
+                    getTrackerButtons(application);
+
+
+                card.innerHTML = `
+
+                    <div class="application-header">
+
+                        <div>
+
+                            <div class="application-title">
+                                ${escapeHtml(
+                                    application.title
+                                )}
+                            </div>
+
+                            <div class="application-company">
+                                ${escapeHtml(
+                                    application.company
+                                )}
+                            </div>
+
+                        </div>
+
+                        <div
+                            class="application-status ${statusClass(application.status)}"
+                        >
+                            ${formatStatus(
+                                application.status
+                            )}
+                        </div>
+
+                    </div>
+
+                    <div class="application-meta">
+
+                        📍 ${escapeHtml(
+                            application.location
+                        )}
+
+                        <br>
+
+                        🎯 ${application.match_score}% Match
+
+                        <br>
+
+                        Generation:
+                        ${escapeHtml(
+                            application.generation_status
+                        )}
+
+                        <br>
+
+                        Approval:
+                        ${escapeHtml(
+                            application.approval_status
+                        )}
+
+                    </div>
+
+
+                    ${generatedContent}
+
+
+                    <div class="application-actions">
+
+                        <a
+                            href="${escapeAttribute(
+                                application.url
+                            )}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            View Original Job
+                        </a>
+
+                        ${generationButtons}
+
+                        ${approvalButtons}
+
+                    </div>
+
+
+                    <div class="tracker-actions">
+
+                        ${trackerButtons}
+
+                        <button
+                            onclick="toggleHistory(${application.id})"
+                        >
+                            View History
+                        </button>
+
+                        <button
+                            class="warning-button"
+                            onclick="showCorrectStatus(${application.id})"
+                        >
+                            Correct Status
+                        </button>
+
+                    </div>
+
+
+                    <div
+                        id="history-${application.id}"
+                        class="history-box"
+                    >
+                        <p class="placeholder">
+                            Loading history...
+                        </p>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            }
+        );
+
+    } catch (error) {
+
+        container.innerHTML =
+            "<p>Could not load applications.</p>";
+
+        console.error(error);
+    }
+}
+
+
+function getTrackerButtons(application) {
+
+    const status =
+        application.status;
+
+    if (
+        status === "draft"
+        ||
+        status === "ready_for_review"
+        ||
+        status === "approved"
+        ||
+        status === "needs_changes"
+    ) {
+
+        return `
+            <button
+                onclick="markApplicationStatus(
+                    ${application.id},
+                    'applied'
+                )"
+            >
+                Mark Applied
+            </button>
+        `;
+    }
+
+
+    if (status === "applied") {
+
+        return `
+
+            <button
+                class="purple-button"
+                onclick="markApplicationStatus(
+                    ${application.id},
+                    'interview'
+                )"
+            >
+                Interview
+            </button>
+
+            <button
+                class="danger-button"
+                onclick="markApplicationStatus(
+                    ${application.id},
+                    'rejected'
+                )"
+            >
+                Rejected
+            </button>
+        `;
+    }
+
+
+    if (status === "interview") {
+
+        return `
+
+            <button
+                class="secondary-button"
+                onclick="markApplicationStatus(
+                    ${application.id},
+                    'offer'
+                )"
+            >
+                Offer
+            </button>
+
+            <button
+                class="danger-button"
+                onclick="markApplicationStatus(
+                    ${application.id},
+                    'rejected'
+                )"
+            >
+                Rejected
+            </button>
+        `;
+    }
+
+
+    if (status === "rejected") {
+
+        return `
+            <span style="
+                color:#991b1b;
+                font-weight:bold;
+            ">
+                Application closed
+            </span>
+        `;
+    }
+
+
+    if (status === "offer") {
+
+        return `
+            <span style="
+                color:#065f46;
+                font-weight:bold;
+            ">
+                🎉 Offer received
+            </span>
+        `;
+    }
+
+
+    return "";
+}
+
+
+async function markApplicationStatus(
+    applicationId,
+    newStatus
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                `/applications/${applicationId}/${newStatus}`,
+                {
+                    method: "POST"
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                `Status update failed: ${response.status}`
+            );
+        }
+
+        await loadApplications();
+
+    } catch (error) {
+
+        alert(
+            "Could not update application status."
+        );
+
+        console.error(error);
+    }
+}
+
+
+function showCorrectStatus(applicationId) {
+
+    const newStatus = prompt(
+        "Correct application status:\n\n" +
+        "Enter one of these:\n" +
+        "draft\n" +
+        "ready_for_review\n" +
+        "approved\n" +
+        "needs_changes\n" +
+        "applied\n" +
+        "interview\n" +
+        "rejected\n" +
+        "offer"
+    );
+
+    if (newStatus === null) {
+        return;
+    }
+
+    const cleanedStatus =
+        newStatus
+            .trim()
+            .toLowerCase();
+
+    const allowedStatuses = [
+        "draft",
+        "ready_for_review",
+        "approved",
+        "needs_changes",
+        "applied",
+        "interview",
+        "rejected",
+        "offer"
+    ];
+
+    if (
+        !allowedStatuses.includes(
+            cleanedStatus
+        )
+    ) {
+
+        alert(
+            "Invalid status.\n\n" +
+            "Allowed statuses are:\n" +
+            allowedStatuses.join(", ")
+        );
+
+        return;
+    }
+
+    const note = prompt(
+        "Why are you correcting this status?",
+        `Corrected application status to ${cleanedStatus}`
+    );
+
+    if (note === null) {
+        return;
+    }
+
+    correctApplicationStatus(
+        applicationId,
+        cleanedStatus,
+        note
+    );
+}
+
+
+async function correctApplicationStatus(
+    applicationId,
+    newStatus,
+    note
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                `/applications/${applicationId}/correct-status`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        new_status: newStatus,
+                        note:
+                            note ||
+                            `Corrected application status to ${newStatus}`
+                    })
+                }
+            );
+
+        if (!response.ok) {
+
+            let message =
+                `Status correction failed: ${response.status}`;
+
+            try {
+
+                const data =
+                    await response.json();
+
+                if (data.detail) {
+                    message = data.detail;
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "Could not read error response.",
+                    error
+                );
+            }
+
+            throw new Error(message);
+        }
+
+        const application =
+            await response.json();
+
+        alert(
+            `Status corrected to ${formatStatus(application.status)}.`
+        );
+
+        await loadApplications();
+
+    } catch (error) {
+
+        alert(
+            "Could not correct application status.\n\n" +
+            error.message
+        );
+
+        console.error(error);
+    }
+}
+
+
+async function toggleHistory(
+    applicationId
+) {
+
+    const box =
+        document.getElementById(
+            `history-${applicationId}`
+        );
+
+    if (
+        box.classList.contains(
+            "visible"
+        )
+    ) {
+
+        box.classList.remove(
+            "visible"
+        );
+
+        return;
+    }
+
+    box.classList.add(
+        "visible"
+    );
+
+    box.innerHTML =
+        "<p>Loading history...</p>";
+
+    try {
+
+        const response =
+            await fetch(
+                `/applications/${applicationId}/history`
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `History request failed: ${response.status}`
+            );
+        }
+
+        const history =
+            await response.json();
+
+        if (history.length === 0) {
+
+            box.innerHTML =
+                '<p class="placeholder">No history recorded yet.</p>';
+
+            return;
+        }
+
+        box.innerHTML =
+            "<h3>Application History</h3>";
+
+        history.forEach(
+            item => {
+
+                const historyItem =
+                    document.createElement(
+                        "div"
+                    );
+
+                historyItem.className =
+                    "history-item";
+
+                historyItem.innerHTML = `
+
+                    <div class="history-dot"></div>
+
+                    <div class="history-status">
+                        ${formatStatus(
+                            item.status
+                        )}
+                    </div>
+
+                    <div class="history-note">
+                        ${escapeHtml(
+                            item.note || ""
+                        )}
+                    </div>
+
+                    <div class="history-date">
+                        ${formatDate(
+                            item.created_at
+                        )}
+                    </div>
+                `;
+
+                box.appendChild(
+                    historyItem
+                );
+            }
+        );
+
+    } catch (error) {
+
+        box.innerHTML =
+            "<p>Could not load history.</p>";
+
+        console.error(error);
+    }
+}
+
+
+async function generateApplication(
+    applicationId
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                `/applications/${applicationId}/generate`,
+                {
+                    method: "POST"
+                }
+            );
+
+        if (!response.ok) {
+
+            const data =
+                await response.json();
+
+            alert(
+                data.detail ||
+                "Could not generate application."
+            );
+
+            return;
+        }
+
+        await loadApplications();
+
+    } catch (error) {
+
+        alert(
+            "Could not generate application."
+        );
+
+        console.error(error);
+    }
+}
+
+
+async function approveApplication(
+    applicationId
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                `/applications/${applicationId}/approve`,
+                {
+                    method: "POST"
+                }
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Approval failed: ${response.status}`
+            );
+        }
+
+        await loadApplications();
+
+    } catch (error) {
+
+        alert(
+            "Could not approve application."
+        );
+
+        console.error(error);
+    }
+}
+
+
+async function rejectApplication(
+    applicationId
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                `/applications/${applicationId}/reject`,
+                {
+                    method: "POST"
+                }
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Update failed: ${response.status}`
+            );
+        }
+
+        await loadApplications();
+
+    } catch (error) {
+
+        alert(
+            "Could not update application."
+        );
+
+        console.error(error);
+    }
+}
+
+
+function statusClass(status) {
+
+    return (
+        "status-" +
+        String(status || "draft")
+    );
+}
+
+
+function formatStatus(status) {
+
+    return String(
+        status || ""
+    )
+        .replaceAll(
+            "_",
+            " "
+        )
+        .replace(
+            /\b\w/g,
+            character =>
+                character.toUpperCase()
+        );
+}
+
+
+function formatDate(value) {
+
+    if (!value) {
+        return "";
+    }
+
+    const date =
+        new Date(value);
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return value;
+    }
+
+    return date.toLocaleString();
+}
+
+
+function formatSalary(
+    min,
+    max
+) {
+
+    if (!min && !max) {
+        return "Salary not listed";
+    }
+
+    const formatter =
+        new Intl.NumberFormat(
+            "en-CA",
+            {
+                style: "currency",
+                currency: "CAD",
+                maximumFractionDigits: 0
+            }
+        );
+
+    if (min && max) {
+
+        return (
+            formatter.format(min) +
+            " - " +
+            formatter.format(max)
+        );
+    }
+
+    if (min) {
+
+        return (
+            formatter.format(min) +
+            "+"
+        );
+    }
+
+    return (
+        "Up to " +
+        formatter.format(max)
+    );
+}
+
+
+async function loadEmails() {
+
+    const container =
+        document.getElementById(
+            "emails"
+        );
+
+    container.innerHTML =
+        "<p>Loading...</p>";
+
+    try {
+
+        const response =
+            await fetch(
+                "/emails?max_results=5"
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Email request failed: ${response.status}`
+            );
+        }
+
+        const emails =
+            await response.json();
+
+        document.getElementById(
+            "emailCount"
+        ).textContent =
+            emails.length;
+
+        container.innerHTML = "";
+
+        emails.forEach(
+            email => {
+
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+                item.className =
+                    "email";
+
+                item.innerHTML = `
+
+                    <div class="email-subject">
+                        ${escapeHtml(
+                            email.subject ||
+                            "(No subject)"
+                        )}
+                    </div>
+
+                    <div class="email-from">
+                        ${escapeHtml(
+                            email.from ||
+                            "Unknown sender"
+                        )}
+                    </div>
+
+                    <div class="email-snippet">
+                        ${escapeHtml(
+                            email.snippet || ""
+                        )}
+                    </div>
+                `;
+
+                container.appendChild(
+                    item
+                );
+            }
+        );
+
+    } catch (error) {
+
+        container.innerHTML =
+            "<p>Could not load emails.</p>";
+
+        console.error(error);
+    }
+}
+
+
+async function createDraft() {
+
+    const to =
+        document.getElementById(
+            "draftTo"
+        ).value;
+
+    const subject =
+        document.getElementById(
+            "draftSubject"
+        ).value;
+
+    const body =
+        document.getElementById(
+            "draftBody"
+        ).value;
+
+    const status =
+        document.getElementById(
+            "draftStatus"
+        );
+
+    status.textContent =
+        "Creating draft...";
+
+    try {
+
+        const response =
+            await fetch(
+                "/emails/draft",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            to: to,
+                            subject: subject,
+                            body: body
+                        })
+                }
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Draft request failed: ${response.status}`
+            );
+        }
+
+        const result =
+            await response.json();
+
+        if (
+            result.status ===
+            "draft_created"
+        ) {
+
+            status.textContent =
+                "✅ Draft created successfully.";
+
+        } else {
+
+            status.textContent =
+                "Something went wrong.";
+        }
+
+    } catch (error) {
+
+        status.textContent =
+            "Could not create draft.";
+
+        console.error(error);
+    }
+}
+
+
+function escapeHtml(value) {
+
+    const div =
+        document.createElement(
+            "div"
+        );
+
+    div.textContent =
+        value || "";
+
+    return div.innerHTML;
+}
+
+
+function escapeAttribute(value) {
+
+    return String(
+        value || ""
+    )
+        .replaceAll(
+            "&",
+            "&amp;"
+        )
+        .replaceAll(
+            '"',
+            "&quot;"
+        )
+        .replaceAll(
+            "<",
+            "&lt;"
+        )
+        .replaceAll(
+            ">",
+            "&gt;"
+        );
+}
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+        loadApplications();
+    }
+);
+
+</script>
+
+</body>
+</html>
