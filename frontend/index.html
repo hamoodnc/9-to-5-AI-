@@ -113,6 +113,8 @@
             margin-top: 4px;
         }
 
+        button:disabled { opacity: 0.55; cursor: not-allowed; }
+
         button:hover {
             background: #1d4ed8;
         }
@@ -565,6 +567,75 @@
 
 <script>
 
+const savedApplications = new Map();
+const dirtyApplications = new Set();
+
+window.addEventListener("beforeunload", event => {
+    if (dirtyApplications.size) {
+        event.preventDefault();
+        event.returnValue = "";
+    }
+});
+
+function replaceApplication(application) {
+    const oldCard = document.getElementById(`application-${application.id}`);
+    const card = renderApplication(application);
+    if (oldCard) oldCard.replaceWith(card);
+    else document.getElementById("applications").appendChild(card);
+}
+
+function updateEditorState(applicationId) {
+    const saved = savedApplications.get(applicationId);
+    const card = document.getElementById(`application-${applicationId}`);
+    const displayedText = value => (value || "").replace(/\r\n?/g, "\n");
+    const dirty = card.querySelector(".message-editor").value !== displayedText(saved.application_message)
+        || card.querySelector(".letter-editor").value !== displayedText(saved.cover_letter);
+    if (dirty) dirtyApplications.add(applicationId);
+    else dirtyApplications.delete(applicationId);
+    card.querySelector(".save-content").disabled = !dirty;
+    card.querySelectorAll(".approve-version, .mark-applied, .regenerate-content, .needs-changes")
+        .forEach(button => button.disabled = dirty);
+    card.querySelector(".review-feedback").textContent = dirty
+        ? "Unsaved changes - save before approving or marking applied. Approval shown below covers only saved content."
+        : "";
+}
+
+async function reviewAction(applicationId, action, body, method = "POST") {
+    const card = document.getElementById(`application-${applicationId}`);
+    if (card.dataset.busy === "true") return;
+    card.dataset.busy = "true";
+    card.querySelectorAll("button, textarea").forEach(element => element.disabled = true);
+    const feedback = card.querySelector(".review-feedback");
+    if (feedback) feedback.textContent = action === "generate" ? "Generating application..." : "Saving...";
+    try {
+        const response = await fetch(`/applications/${applicationId}/${action}`, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || `Request failed: ${response.status}`);
+        dirtyApplications.delete(applicationId);
+        replaceApplication(data);
+    } catch (error) {
+        card.dataset.busy = "false";
+        card.querySelectorAll("button, textarea").forEach(element => element.disabled = false);
+        if (card.querySelector(".message-editor")) updateEditorState(applicationId);
+        if (feedback) feedback.textContent = error.message + " Your edits have been kept on screen.";
+        else alert(error.message);
+    }
+}
+
+function saveApplicationContent(applicationId) {
+    const card = document.getElementById(`application-${applicationId}`);
+    return reviewAction(applicationId, "content", {
+        expected_version: savedApplications.get(applicationId).content_version,
+        application_message: card.querySelector(".message-editor").value,
+        cover_letter: card.querySelector(".letter-editor").value
+    }, "PUT");
+}
+
+
 async function loadJobs() {
 
     const keywords =
@@ -772,6 +843,8 @@ async function createApplication(job) {
 
 
 async function loadApplications() {
+    if (dirtyApplications.size && !confirm("Refreshing will discard unsaved edits. Continue?")) return;
+    dirtyApplications.clear();
 
     const container =
         document.getElementById(
@@ -810,226 +883,7 @@ async function loadApplications() {
             return;
         }
 
-        applications.forEach(
-            application => {
-
-                const card =
-                    document.createElement(
-                        "div"
-                    );
-
-                card.className =
-                    "application-card";
-
-                let generatedContent = "";
-
-                if (
-                    application.generation_status ===
-                    "generated"
-                ) {
-
-                    generatedContent = `
-
-                        <div class="generated-content">
-
-                            <h3>
-                                Application Message
-                            </h3>
-
-                            <div class="generated-text">
-${escapeHtml(
-    application.application_message
-)}
-                            </div>
-
-                            <h3 style="margin-top:20px;">
-                                Cover Letter
-                            </h3>
-
-                            <div class="generated-text">
-${escapeHtml(
-    application.cover_letter
-)}
-                            </div>
-
-                        </div>
-                    `;
-                }
-
-
-                let generationButtons = "";
-
-                if (
-                    application.generation_status !==
-                    "generated"
-                    &&
-                    application.status !== "applied"
-                    &&
-                    application.status !== "interview"
-                    &&
-                    application.status !== "rejected"
-                    &&
-                    application.status !== "offer"
-                ) {
-
-                    generationButtons = `
-
-                        <button
-                            onclick="generateApplication(${application.id})"
-                        >
-                            Generate Application
-                        </button>
-                    `;
-                }
-
-
-                let approvalButtons = "";
-
-                if (
-                    application.generation_status ===
-                    "generated"
-                    &&
-                    application.approval_status ===
-                    "pending"
-                    &&
-                    application.status !== "applied"
-                ) {
-
-                    approvalButtons = `
-
-                        <button
-                            class="secondary-button"
-                            onclick="approveApplication(${application.id})"
-                        >
-                            Approve
-                        </button>
-
-                        <button
-                            class="danger-button"
-                            onclick="rejectApplication(${application.id})"
-                        >
-                            Needs Changes
-                        </button>
-                    `;
-                }
-
-
-                const trackerButtons =
-                    getTrackerButtons(application);
-
-
-                card.innerHTML = `
-
-                    <div class="application-header">
-
-                        <div>
-
-                            <div class="application-title">
-                                ${escapeHtml(
-                                    application.title
-                                )}
-                            </div>
-
-                            <div class="application-company">
-                                ${escapeHtml(
-                                    application.company
-                                )}
-                            </div>
-
-                        </div>
-
-                        <div
-                            class="application-status ${statusClass(application.status)}"
-                        >
-                            ${formatStatus(
-                                application.status
-                            )}
-                        </div>
-
-                    </div>
-
-                    <div class="application-meta">
-
-                        📍 ${escapeHtml(
-                            application.location
-                        )}
-
-                        <br>
-
-                        🎯 ${application.match_score}% Match
-
-                        <br>
-
-                        Generation:
-                        ${escapeHtml(
-                            application.generation_status
-                        )}
-
-                        <br>
-
-                        Approval:
-                        ${escapeHtml(
-                            application.approval_status
-                        )}
-
-                    </div>
-
-
-                    ${generatedContent}
-
-
-                    <div class="application-actions">
-
-                        <a
-                            href="${escapeAttribute(
-                                application.url
-                            )}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            View Original Job
-                        </a>
-
-                        ${generationButtons}
-
-                        ${approvalButtons}
-
-                    </div>
-
-
-                    <div class="tracker-actions">
-
-                        ${trackerButtons}
-
-                        <button
-                            onclick="toggleHistory(${application.id})"
-                        >
-                            View History
-                        </button>
-
-                        <button
-                            class="warning-button"
-                            onclick="showCorrectStatus(${application.id})"
-                        >
-                            Correct Status
-                        </button>
-
-                    </div>
-
-
-                    <div
-                        id="history-${application.id}"
-                        class="history-box"
-                    >
-                        <p class="placeholder">
-                            Loading history...
-                        </p>
-                    </div>
-                `;
-
-                container.appendChild(card);
-            }
-        );
+        applications.forEach(application => container.appendChild(renderApplication(application)));
 
     } catch (error) {
 
@@ -1041,24 +895,209 @@ ${escapeHtml(
 }
 
 
+function renderApplication(application) {
+    const card =
+        document.createElement(
+            "div"
+        );
+
+    card.id = `application-${application.id}`;
+    savedApplications.set(application.id, application);
+    card.className =
+        "application-card";
+
+    let generatedContent = "";
+
+    if (
+        application.generation_status ===
+        "generated"
+    ) {
+
+        generatedContent = `
+            <div class="generated-content">
+                <p><strong>Saved content version ${application.content_version}</strong></p>
+                <p class="version-approval">${application.current_version_approved
+                    ? `Approved - version ${application.approved_version}`
+                    : "Review required - current version is not approved"}</p>
+                <label for="message-${application.id}">Application Message</label>
+                <textarea id="message-${application.id}" class="message-editor" rows="8"></textarea>
+                <label for="letter-${application.id}">Cover Letter</label>
+                <textarea id="letter-${application.id}" class="letter-editor" rows="14"></textarea>
+                <button class="save-content" onclick="saveApplicationContent(${application.id})" disabled>Save changes</button>
+                <p>Changing either text clears approval and requires a new review.</p>
+            </div>
+        `;
+    }
+
+
+    let generationButtons = "";
+
+    if (!application.current_version_approved && !["applied", "interview", "rejected", "offer"].includes(application.status)) {
+        generationButtons = `
+
+            <button
+                class="regenerate-content" onclick="generateApplication(${application.id})"
+            >
+                ${application.content_version ? "Regenerate Application" : "Generate Application"}
+            </button>
+        `;
+    }
+
+
+    let approvalButtons = "";
+
+    if (application.generation_status === "generated" && !application.current_version_approved) {
+        approvalButtons = `
+
+            <button
+                class="secondary-button approve-version"
+                onclick="approveApplication(${application.id})"
+            >
+                Approve current version
+            </button>
+
+            <button
+                class="danger-button needs-changes"
+                onclick="rejectApplication(${application.id})"
+            >
+                Needs Changes
+            </button>
+        `;
+    }
+
+
+    const trackerButtons =
+        getTrackerButtons(application);
+
+
+    card.innerHTML = `
+
+        <div class="application-header">
+
+            <div>
+
+                <div class="application-title">
+                    ${escapeHtml(
+                        application.title
+                    )}
+                </div>
+
+                <div class="application-company">
+                    ${escapeHtml(
+                        application.company
+                    )}
+                </div>
+
+            </div>
+
+            <div
+                class="application-status ${statusClass(application.status)}"
+            >
+                ${formatStatus(
+                    application.status
+                )}
+            </div>
+
+        </div>
+
+        <div class="application-meta">
+
+            📍 ${escapeHtml(
+                application.location
+            )}
+
+            <br>
+
+            🎯 ${application.match_score}% Match
+
+            <br>
+
+            Generation:
+            ${escapeHtml(
+                application.generation_status
+            )}
+
+            <br>
+
+            Approval:
+            ${escapeHtml(
+                application.approval_status
+            )}
+
+        </div>
+
+
+        <p class="review-feedback" role="status" aria-live="polite"></p>
+        ${generatedContent}
+
+
+        <div class="application-actions">
+
+            <a
+                href="${escapeAttribute(
+                    application.url
+                )}"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                View Original Job
+            </a>
+
+            ${generationButtons}
+
+            ${approvalButtons}
+
+        </div>
+
+
+        <div class="tracker-actions">
+
+            ${trackerButtons}
+
+            <button
+                onclick="toggleHistory(${application.id})"
+            >
+                View History
+            </button>
+
+            <button
+                class="warning-button"
+                onclick="showCorrectStatus(${application.id})"
+            >
+                Correct Status
+            </button>
+
+        </div>
+
+
+        <div
+            id="history-${application.id}"
+            class="history-box"
+        >
+            <p class="placeholder">
+                Loading history...
+            </p>
+        </div>
+    `;
+
+    if (application.generation_status === "generated") {
+        card.querySelector(".message-editor").value = application.application_message;
+        card.querySelector(".letter-editor").value = application.cover_letter;
+        card.querySelectorAll("textarea").forEach(editor =>
+            editor.addEventListener("input", () => updateEditorState(application.id)));
+    }
+    return card;
+}
+
 function getTrackerButtons(application) {
 
     const status =
         application.status;
 
-    if (
-        status === "draft"
-        ||
-        status === "ready_for_review"
-        ||
-        status === "approved"
-        ||
-        status === "needs_changes"
-    ) {
-
+    if (application.current_version_approved && status === "approved") {
         return `
             <button
-                onclick="markApplicationStatus(
+                class="mark-applied" onclick="markApplicationStatus(
                     ${application.id},
                     'applied'
                 )"
@@ -1153,48 +1192,28 @@ function getTrackerButtons(application) {
 }
 
 
-async function markApplicationStatus(
-    applicationId,
-    newStatus
-) {
-
-    try {
-
-        const response =
-            await fetch(
-                `/applications/${applicationId}/${newStatus}`,
-                {
-                    method: "POST"
-                }
-            );
-
-        if (!response.ok) {
-            throw new Error(
-                `Status update failed: ${response.status}`
-            );
-        }
-
-        await loadApplications();
-
-    } catch (error) {
-
-        alert(
-            "Could not update application status."
-        );
-
-        console.error(error);
+async function markApplicationStatus(applicationId, newStatus) {
+    if (dirtyApplications.has(applicationId)) {
+        alert("Save your edits before changing tracking status.");
+        return;
     }
+    return reviewAction(applicationId, newStatus, {
+        expected_version: savedApplications.get(applicationId).content_version
+    });
 }
 
 
 function showCorrectStatus(applicationId) {
+    if (dirtyApplications.has(applicationId)) {
+        alert("Save your edits before correcting status.");
+        return;
+    }
 
     const newStatus = prompt(
         "Correct application status:\n\n" +
         "Enter one of these:\n" +
         "draft\n" +
         "ready_for_review\n" +
-        "approved\n" +
         "needs_changes\n" +
         "applied\n" +
         "interview\n" +
@@ -1214,7 +1233,6 @@ function showCorrectStatus(applicationId) {
     const allowedStatuses = [
         "draft",
         "ready_for_review",
-        "approved",
         "needs_changes",
         "applied",
         "interview",
@@ -1254,77 +1272,11 @@ function showCorrectStatus(applicationId) {
 }
 
 
-async function correctApplicationStatus(
-    applicationId,
-    newStatus,
-    note
-) {
-
-    try {
-
-        const response =
-            await fetch(
-                `/applications/${applicationId}/correct-status`,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        new_status: newStatus,
-                        note:
-                            note ||
-                            `Corrected application status to ${newStatus}`
-                    })
-                }
-            );
-
-        if (!response.ok) {
-
-            let message =
-                `Status correction failed: ${response.status}`;
-
-            try {
-
-                const data =
-                    await response.json();
-
-                if (data.detail) {
-                    message = data.detail;
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "Could not read error response.",
-                    error
-                );
-            }
-
-            throw new Error(message);
-        }
-
-        const application =
-            await response.json();
-
-        alert(
-            `Status corrected to ${formatStatus(application.status)}.`
-        );
-
-        await loadApplications();
-
-    } catch (error) {
-
-        alert(
-            "Could not correct application status.\n\n" +
-            error.message
-        );
-
-        console.error(error);
-    }
+async function correctApplicationStatus(applicationId, newStatus, note) {
+    return reviewAction(applicationId, "correct-status", {
+        new_status: newStatus,
+        note: note || `Corrected application status to ${newStatus}`
+    });
 }
 
 
@@ -1407,9 +1359,7 @@ async function toggleHistory(
                     </div>
 
                     <div class="history-note">
-                        ${escapeHtml(
-                            item.note || ""
-                        )}
+                        ${escapeHtml(item.event_type || "status_changed")} ${item.content_version == null ? "" : `(v${item.content_version})`}<br>${escapeHtml(item.note || "")}
                     </div>
 
                     <div class="history-date">
@@ -1435,111 +1385,23 @@ async function toggleHistory(
 }
 
 
-async function generateApplication(
-    applicationId
-) {
-
-    try {
-
-        const response =
-            await fetch(
-                `/applications/${applicationId}/generate`,
-                {
-                    method: "POST"
-                }
-            );
-
-        if (!response.ok) {
-
-            const data =
-                await response.json();
-
-            alert(
-                data.detail ||
-                "Could not generate application."
-            );
-
-            return;
-        }
-
-        await loadApplications();
-
-    } catch (error) {
-
-        alert(
-            "Could not generate application."
-        );
-
-        console.error(error);
-    }
+async function generateApplication(applicationId) {
+    if (dirtyApplications.has(applicationId)) return;
+    return reviewAction(applicationId, "generate");
 }
 
-
-async function approveApplication(
-    applicationId
-) {
-
-    try {
-
-        const response =
-            await fetch(
-                `/applications/${applicationId}/approve`,
-                {
-                    method: "POST"
-                }
-            );
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Approval failed: ${response.status}`
-            );
-        }
-
-        await loadApplications();
-
-    } catch (error) {
-
-        alert(
-            "Could not approve application."
-        );
-
-        console.error(error);
-    }
+async function approveApplication(applicationId) {
+    if (dirtyApplications.has(applicationId)) return;
+    const version = savedApplications.get(applicationId).content_version;
+    if (!confirm(`Approve the saved application message and cover letter, version ${version}?`)) return;
+    return reviewAction(applicationId, "approve", { expected_version: version });
 }
 
-
-async function rejectApplication(
-    applicationId
-) {
-
-    try {
-
-        const response =
-            await fetch(
-                `/applications/${applicationId}/reject`,
-                {
-                    method: "POST"
-                }
-            );
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Update failed: ${response.status}`
-            );
-        }
-
-        await loadApplications();
-
-    } catch (error) {
-
-        alert(
-            "Could not update application."
-        );
-
-        console.error(error);
-    }
+async function rejectApplication(applicationId) {
+    if (dirtyApplications.has(applicationId)) return;
+    return reviewAction(applicationId, "reject", {
+        expected_version: savedApplications.get(applicationId).content_version
+    });
 }
 
 

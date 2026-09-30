@@ -3,379 +3,175 @@ from datetime import datetime
 from database_services.database import DatabaseService
 
 
+class ReviewConflict(ValueError):
+    """The requested action is not valid for the current saved review state."""
+
+
 class ApplicationService:
-    def __init__(self):
-        self.database = DatabaseService()
+    TRACKING_STATUSES = {"applied", "interview", "rejected", "offer"}
+    ALLOWED_STATUSES = {"draft", "ready_for_review", "approved", "needs_changes"} | TRACKING_STATUSES
 
-        self.applications = (
-            self.database.load_applications()
+    def __init__(self, database=None):
+        self.database = database or DatabaseService()
+
+    @staticmethod
+    def has_valid_approval(application):
+        return bool(
+            application["content_version"] > 0
+            and application["approved_version"] == application["content_version"]
+            and application["approval_status"] == "approved"
+            and application["approved_at"]
+            and (application["application_message"] or "").strip()
+            and (application["cover_letter"] or "").strip()
         )
 
-    def _now(self):
-        return datetime.now().isoformat()
-
-    def _refresh(self):
-        self.applications = (
-            self.database.load_applications()
-        )
-
-    def get_applications(self):
-        self._refresh()
-        return self.applications
-
-    def get_application(self, application_id):
-        self._refresh()
-
-        for application in self.applications:
-            if application["id"] == application_id:
-                return application
-
-        return None
-
-    def create_application(
-        self,
-        job_id,
-        title,
-        company,
-        location,
-        url,
-        description="",
-        match_score=0,
-    ):
-        self._refresh()
-
-        for application in self.applications:
-            if str(application["job_id"]) == str(job_id):
-                return application
-
-        now = self._now()
-
-        application = {
-            "job_id": str(job_id),
-            "title": title,
-            "company": company,
-            "location": location,
-            "url": url,
-            "description": description,
-            "match_score": match_score,
-            "status": "draft",
-            "generation_status": "not_generated",
-            "approval_status": "pending",
-            "application_message": "",
-            "cover_letter": "",
-            "created_at": now,
-            "updated_at": now,
-        }
-
-        self.database.save_application(
-            application
-        )
-
-        self._refresh()
-
-        saved_application = None
-
-        for item in self.applications:
-            if str(item["job_id"]) == str(job_id):
-                saved_application = item
-                break
-
-        if saved_application:
-            self.database.add_application_history(
-                application_id=saved_application["id"],
-                status="draft",
-                note="Application created",
-            )
-
-            return saved_application
-
+    def _present(self, application):
+        if application is not None:
+            application["current_version_approved"] = self.has_valid_approval(application)
         return application
 
-    def save_generated_content(
-        self,
-        application_id,
-        application_message,
-        cover_letter,
-    ):
-        application = self.get_application(
-            application_id
-        )
+    def get_applications(self):
+        return [self._present(a) for a in self.database.load_applications()]
 
-        if application is None:
-            return None
+    def get_application(self, application_id):
+        return self._present(self.database.get_application(application_id))
 
-        application["application_message"] = (
-            application_message
-        )
+    def _change(self, application_id, change):
+        return self._present(self.database.update_application(application_id, change))
 
-        application["cover_letter"] = (
-            cover_letter
-        )
+    @staticmethod
+    def _expect_version(application, expected_version):
+        if expected_version != application["content_version"]:
+            raise ReviewConflict("Content changed since you loaded it. Reload and review the latest version.")
 
-        application["generation_status"] = (
-            "generated"
-        )
+    @staticmethod
+    def _require_content(application):
+        if (application["content_version"] < 1
+                or not (application["application_message"] or "").strip()
+                or not (application["cover_letter"] or "").strip()):
+            raise ReviewConflict("Save a nonempty application message and cover letter before approval.")
 
-        application["status"] = (
-            "ready_for_review"
-        )
+    def _invalidate(self, application, reason):
+        events = []
+        if application["approved_version"] is not None:
+            events.append(("approval_invalidated",
+                           f"Approval for version {application['approved_version']} invalidated: {reason}"))
+        application["approved_version"] = None
+        application["approved_at"] = None
+        application["approval_status"] = "pending"
+        return events
 
-        application["approval_status"] = (
-            "pending"
-        )
+    def create_application(self, job_id, title, company, location, url,
+                           description="", match_score=0):
+        now = datetime.now().isoformat()
+        return self._present(self.database.create_application({
+            "job_id": str(job_id), "title": title, "company": company,
+            "location": location, "url": url, "description": description,
+            "match_score": match_score, "status": "draft",
+            "generation_status": "not_generated", "approval_status": "pending",
+            "application_message": "", "cover_letter": "",
+            "created_at": now, "updated_at": now,
+        }))
 
-        application["updated_at"] = (
-            self._now()
-        )
+    def _save_content(self, application_id, application_message, cover_letter,
+                      expected_version, event_type):
+        if not application_message.strip() or not cover_letter.strip():
+            raise ReviewConflict("Both the application message and cover letter must contain text.")
 
-        self.database.save_application(
-            application
-        )
+        def change(application):
+            self._expect_version(application, expected_version)
+            if event_type == "edited" and application["content_version"] == 0:
+                raise ReviewConflict("Generate application content before editing it.")
+            if (event_type == "edited"
+                    and application["application_message"] == application_message
+                    and application["cover_letter"] == cover_letter):
+                # Saving unchanged text must not invalidate a valid approval.
+                return []
+            events = self._invalidate(application, "application content changed")
+            application["application_message"] = application_message
+            application["cover_letter"] = cover_letter
+            application["content_version"] += 1
+            application["generation_status"] = "generated"
+            application["status"] = "ready_for_review"
+            events.append((event_type,
+                           f"Content {event_type}; version {application['content_version']} requires review"))
+            return events
 
-        self.database.add_application_history(
-            application_id=application_id,
-            status="ready_for_review",
-            note="Application content generated",
-        )
+        return self._change(application_id, change)
 
-        return self.get_application(
-            application_id
-        )
+    def save_generated_content(self, application_id, application_message, cover_letter,
+                               expected_version):
+        return self._save_content(application_id, application_message, cover_letter,
+                                  expected_version, "generated")
 
-    def approve_application(
-        self,
-        application_id,
-    ):
-        application = self.get_application(
-            application_id
-        )
+    def edit_content(self, application_id, application_message, cover_letter, expected_version):
+        return self._save_content(application_id, application_message, cover_letter,
+                                  expected_version, "edited")
 
-        if application is None:
-            return None
+    def approve_application(self, application_id, expected_version):
+        def change(application):
+            self._expect_version(application, expected_version)
+            self._require_content(application)
+            if self.has_valid_approval(application):
+                return []
+            application["approved_version"] = application["content_version"]
+            application["approved_at"] = datetime.now().isoformat()
+            application["approval_status"] = "approved"
+            application["status"] = "approved"
+            return [("approved", f"Human approved content version {application['content_version']}")]
+        return self._change(application_id, change)
 
-        application["approval_status"] = (
-            "approved"
-        )
+    def reject_application(self, application_id, expected_version):
+        def change(application):
+            self._expect_version(application, expected_version)
+            self._require_content(application)
+            events = self._invalidate(application, "human requested changes")
+            application["approval_status"] = "needs_changes"
+            application["status"] = "ready_for_review"
+            return events + [("changes_requested", "Human requested changes; content still requires review")]
+        return self._change(application_id, change)
 
-        application["status"] = (
-            "approved"
-        )
+    def _set_status(self, application_id, new_status, note, expected_version=None):
+        if new_status not in self.ALLOWED_STATUSES:
+            raise ReviewConflict("Invalid application status.")
+        if new_status == "approved":
+            raise ReviewConflict("Use Approve current version after reviewing the saved content.")
 
-        application["updated_at"] = (
-            self._now()
-        )
+        def change(application):
+            if expected_version is not None:
+                self._expect_version(application, expected_version)
+            events = []
+            if new_status in self.TRACKING_STATUSES:
+                if not self.has_valid_approval(application):
+                    raise ReviewConflict("The current content version requires human approval first.")
+            else:
+                if new_status == "draft" and application["content_version"] > 0:
+                    raise ReviewConflict("Generated content must remain ready for review until approved.")
+                if new_status != "draft":
+                    self._require_content(application)
+                events = self._invalidate(application, "returned to review")
+                if new_status == "needs_changes":
+                    application["approval_status"] = "needs_changes"
+            application["status"] = "ready_for_review" if new_status == "needs_changes" else new_status
+            return events + [("status_changed", note)]
+        return self._change(application_id, change)
 
-        self.database.save_application(
-            application
-        )
+    def mark_applied(self, application_id, expected_version):
+        return self._set_status(application_id, "applied",
+                                "Application manually marked as submitted; no automatic submission performed",
+                                expected_version)
 
-        self.database.add_application_history(
-            application_id=application_id,
-            status="approved",
-            note="Application approved for submission",
-        )
+    def mark_interview(self, application_id):
+        return self._set_status(application_id, "interview", "Interview stage reached")
 
-        return self.get_application(
-            application_id
-        )
+    def mark_rejected(self, application_id):
+        return self._set_status(application_id, "rejected", "Application marked as rejected")
 
-    def reject_application(
-        self,
-        application_id,
-    ):
-        application = self.get_application(
-            application_id
-        )
+    def mark_offer(self, application_id):
+        return self._set_status(application_id, "offer", "Offer received")
 
-        if application is None:
-            return None
+    def correct_status(self, application_id, new_status, note="Status corrected manually"):
+        return self._set_status(application_id, new_status, note)
 
-        application["approval_status"] = (
-            "needs_changes"
-        )
-
-        application["status"] = (
-            "needs_changes"
-        )
-
-        application["updated_at"] = (
-            self._now()
-        )
-
-        self.database.save_application(
-            application
-        )
-
-        self.database.add_application_history(
-            application_id=application_id,
-            status="needs_changes",
-            note="Application marked for changes",
-        )
-
-        return self.get_application(
-            application_id
-        )
-
-    def mark_applied(
-        self,
-        application_id,
-    ):
-        application = self.get_application(
-            application_id
-        )
-
-        if application is None:
-            return None
-
-        application["status"] = "applied"
-        application["updated_at"] = self._now()
-
-        self.database.save_application(
-            application
-        )
-
-        self.database.add_application_history(
-            application_id=application_id,
-            status="applied",
-            note="Application marked as submitted",
-        )
-
-        return self.get_application(
-            application_id
-        )
-
-    def mark_interview(
-        self,
-        application_id,
-    ):
-        application = self.get_application(
-            application_id
-        )
-
-        if application is None:
-            return None
-
-        application["status"] = "interview"
-        application["updated_at"] = self._now()
-
-        self.database.save_application(
-            application
-        )
-
-        self.database.add_application_history(
-            application_id=application_id,
-            status="interview",
-            note="Interview stage reached",
-        )
-
-        return self.get_application(
-            application_id
-        )
-
-    def mark_rejected(
-        self,
-        application_id,
-    ):
-        application = self.get_application(
-            application_id
-        )
-
-        if application is None:
-            return None
-
-        application["status"] = "rejected"
-        application["updated_at"] = self._now()
-
-        self.database.save_application(
-            application
-        )
-
-        self.database.add_application_history(
-            application_id=application_id,
-            status="rejected",
-            note="Application marked as rejected",
-        )
-
-        return self.get_application(
-            application_id
-        )
-
-    def mark_offer(
-        self,
-        application_id,
-    ):
-        application = self.get_application(
-            application_id
-        )
-
-        if application is None:
-            return None
-
-        application["status"] = "offer"
-        application["updated_at"] = self._now()
-
-        self.database.save_application(
-            application
-        )
-
-        self.database.add_application_history(
-            application_id=application_id,
-            status="offer",
-            note="Offer received",
-        )
-
-        return self.get_application(
-            application_id
-        )
-
-    def correct_status(
-        self,
-        application_id,
-        new_status,
-        note="Status corrected manually",
-    ):
-        allowed_statuses = [
-            "draft",
-            "ready_for_review",
-            "approved",
-            "needs_changes",
-            "applied",
-            "interview",
-            "rejected",
-            "offer",
-        ]
-
-        if new_status not in allowed_statuses:
-            return None
-
-        application = self.get_application(
-            application_id
-        )
-
-        if application is None:
-            return None
-
-        application["status"] = new_status
-        application["updated_at"] = self._now()
-
-        self.database.save_application(
-            application
-        )
-
-        self.database.add_application_history(
-            application_id=application_id,
-            status=new_status,
-            note=note,
-        )
-
-        return self.get_application(
-            application_id
-        )
-
-    def get_history(
-        self,
-        application_id,
-    ):
-        return self.database.get_application_history(
-            application_id
-        )
+    def get_history(self, application_id):
+        return self.database.get_application_history(application_id)

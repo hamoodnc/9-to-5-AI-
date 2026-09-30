@@ -3,13 +3,13 @@ from pathlib import Path
 import re
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 from email_services.gmail import GmailService
 from job_services.jobs import JobService
-from application_services.applications import ApplicationService
+from application_services.applications import ApplicationService, ReviewConflict
 from profile_services.profile import ProfileService
 from ai_services.gemini import generate_application as generate_ai_application
 
@@ -19,6 +19,11 @@ app = FastAPI(
     description="Your personal AI career and productivity assistant",
     version="0.1.0",
 )
+
+
+@app.exception_handler(ReviewConflict)
+async def review_conflict_handler(request, error):
+    return JSONResponse(status_code=409, content={"detail": str(error)})
 
 
 gmail_service = GmailService()
@@ -62,6 +67,15 @@ class ProfileUpdateRequest(BaseModel):
 
 class ResumeRequest(BaseModel):
     resume_text: str
+
+
+class ContentVersionRequest(BaseModel):
+    expected_version: int = Field(ge=0)
+
+
+class ContentEditRequest(ContentVersionRequest):
+    application_message: str = Field(min_length=1)
+    cover_letter: str = Field(min_length=1)
 
 
 class StatusCorrectionRequest(BaseModel):
@@ -509,7 +523,7 @@ def generate_application(
 
     marker = "COVER LETTER:"
 
-    if marker not in ai_result:
+    if not isinstance(ai_result, str) or marker not in ai_result:
         raise HTTPException(
             status_code=500,
             detail="Gemini returned an unexpected response format.",
@@ -532,7 +546,19 @@ def generate_application(
         application_id=application_id,
         application_message=application_message,
         cover_letter=cover_letter,
+        expected_version=application["content_version"],
     )
+
+
+@app.put("/applications/{application_id}/content")
+def edit_application_content(application_id: int, request: ContentEditRequest):
+    application = application_service.edit_content(
+        application_id, request.application_message, request.cover_letter,
+        request.expected_version,
+    )
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return application
 
 
 # --------------------------------------------------
@@ -543,12 +569,13 @@ def generate_application(
     "/applications/{application_id}/approve"
 )
 def approve_application(
-    application_id: int
+    application_id: int,
+    request: ContentVersionRequest,
 ):
     application = (
         application_service
         .approve_application(
-            application_id
+            application_id, request.expected_version
         )
     )
 
@@ -567,12 +594,13 @@ def approve_application(
     "/applications/{application_id}/reject"
 )
 def reject_application(
-    application_id: int
+    application_id: int,
+    request: ContentVersionRequest,
 ):
     application = (
         application_service
         .reject_application(
-            application_id
+            application_id, request.expected_version
         )
     )
 
@@ -595,12 +623,13 @@ def reject_application(
     "/applications/{application_id}/applied"
 )
 def mark_application_applied(
-    application_id: int
+    application_id: int,
+    request: ContentVersionRequest,
 ):
     application = (
         application_service
         .mark_applied(
-            application_id
+            application_id, request.expected_version
         )
     )
 
